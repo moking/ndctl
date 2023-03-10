@@ -73,6 +73,7 @@ struct cxl_port {
 	struct cxl_bus *bus;
 	enum cxl_port_type type;
 	struct cxl_port *parent;
+	struct cxl_dport *parent_dport;
 	struct kmod_module *module;
 	struct list_node list;
 	struct list_head child_ports;

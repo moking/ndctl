@@ -1323,6 +1323,16 @@ CXL_EXPORT const char *cxl_memdev_get_firmware_verison(struct cxl_memdev *memdev
 	return memdev->firmware_version;
 }
 
+CXL_EXPORT const char *cxl_memdev_get_parent_dport(struct cxl_memdev *memdev)
+{
+	struct cxl_port *port = cxl_endpoint_get_port(memdev->endpoint);
+
+	if (port)
+		return cxl_port_get_parent_dport(port);
+
+	return NULL;
+}
+
 static void bus_invalidate(struct cxl_bus *bus)
 {
 	struct cxl_ctx *ctx = cxl_bus_get_ctx(bus);
@@ -1503,6 +1513,24 @@ CXL_EXPORT int cxl_memdev_nvdimm_bridge_active(struct cxl_memdev *memdev)
 	return is_enabled(path);
 }
 
+static struct cxl_dport *cxl_port_find_parent_dport(struct cxl_port *port,
+			struct cxl_port *parent_port)
+{
+	struct cxl_dport *dport;
+
+	if (parent_port && parent_port->nr_dports) {
+		cxl_dport_foreach(parent_port, dport) {
+			/* HB ACPI0016 can have only one dport and being itself */
+			if (!strcmp(port->uport, dport->dev_path))
+				return NULL;
+			if (strstr(port->uport, dport->dev_path))
+				return dport;
+		}
+	}
+
+	return NULL;
+}
+
 static int cxl_port_init(struct cxl_port *port, struct cxl_port *parent_port,
 			 enum cxl_port_type type, struct cxl_ctx *ctx, int id,
 			 const char *cxlport_base)
@@ -1541,6 +1569,8 @@ static int cxl_port_init(struct cxl_port *port, struct cxl_port *parent_port,
 	port->uport = realpath(port->dev_buf, NULL);
 	if (!port->uport)
 		goto err;
+
+	port->parent_dport = cxl_port_find_parent_dport(port, parent_port);
 
 	sprintf(path, "%s/modalias", cxlport_base);
 	if (sysfs_read_attr(ctx, path, buf) == 0)
@@ -2472,6 +2502,15 @@ CXL_EXPORT int cxl_port_get_id(struct cxl_port *port)
 CXL_EXPORT struct cxl_port *cxl_port_get_parent(struct cxl_port *port)
 {
 	return port->parent;
+}
+
+CXL_EXPORT const char *cxl_port_get_parent_dport(struct cxl_port *port)
+{
+	if (port->parent_dport)
+		return devpath_to_devname(port->parent_dport->dev_path);
+	else if (port->parent)
+		return devpath_to_devname(port->parent->uport);
+	return NULL;
 }
 
 CXL_EXPORT bool cxl_port_is_root(struct cxl_port *port)

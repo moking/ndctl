@@ -34,6 +34,7 @@ void cxl_set_private_data(struct cxl_ctx *ctx, void *data);
 void *cxl_get_private_data(struct cxl_ctx *ctx);
 
 struct cxl_memdev;
+const char *cxl_memdev_get_parent_dport(struct cxl_memdev *memdev);
 struct cxl_memdev *cxl_memdev_get_first(struct cxl_ctx *ctx);
 struct cxl_memdev *cxl_memdev_get_next(struct cxl_memdev *memdev);
 int cxl_memdev_get_id(struct cxl_memdev *memdev);
@@ -89,6 +90,7 @@ int cxl_bus_disable_invalidate(struct cxl_bus *bus);
 	     bus = cxl_bus_get_next(bus))
 
 struct cxl_port;
+const char *cxl_port_get_parent_dport(struct cxl_port *port);
 struct cxl_port *cxl_port_get_first(struct cxl_port *parent);
 struct cxl_port *cxl_port_get_next(struct cxl_port *port);
 const char *cxl_port_get_devname(struct cxl_port *port);

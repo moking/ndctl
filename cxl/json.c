@@ -539,6 +539,10 @@ struct json_object *util_cxl_memdev_to_json(struct cxl_memdev *memdev,
 	if (jobj)
 		json_object_object_add(jdev, "host", jobj);
 
+	jobj = json_object_new_string(cxl_memdev_get_parent_dport(memdev));
+	if (jobj)
+		json_object_object_add(jdev, "parent_dport", jobj);
+
 	if (!cxl_memdev_is_enabled(memdev)) {
 		jobj = json_object_new_string("disabled");
 		if (jobj)
@@ -981,6 +985,10 @@ static struct json_object *__util_cxl_port_to_json(struct cxl_port *port,
 	jobj = json_object_new_string(cxl_port_get_host(port));
 	if (jobj)
 		json_object_object_add(jport, "host", jobj);
+
+	jobj = json_object_new_string(cxl_port_get_parent_dport(port));
+	if (jobj)
+		json_object_object_add(jport, "parent_dport", jobj);
 
 	jobj = json_object_new_int(cxl_port_get_depth(port));
 	if (jobj)
