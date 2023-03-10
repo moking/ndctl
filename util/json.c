@@ -106,7 +106,7 @@ void util_display_json_array(FILE *f_out, struct json_object *jarray,
 		unsigned long flags)
 {
 	int len = json_object_array_length(jarray);
-	int jflag = JSON_C_TO_STRING_PRETTY;
+	int jflag = JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_NOSLASHESCAPE;
 
 	if (len > 1 || !(flags & UTIL_JSON_HUMAN)) {
 		if (len == 0)

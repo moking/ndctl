@@ -1164,10 +1164,6 @@ struct json_object *cxl_filter_walk(struct cxl_ctx *ctx,
 			}
 		}
 walk_children:
-		dbg(p, "walk decoders\n");
-		walk_decoders(port, p, pick_array(jchilddecoders, jbusdecoders),
-			      pick_array(jchildregions, jregions), flags);
-
 		dbg(p, "walk rch endpoints\n");
 		if (p->endpoints || p->memdevs || p->decoders)
 			walk_endpoints(port, p,
@@ -1176,12 +1172,23 @@ walk_children:
 				       pick_array(jchilddecoders, jepdecoders),
 				       flags);
 
+		/* Need to walk ports before walking decoder so dport will be
+		 * properly initialized which is needed to get the correct
+		 * parent_dport of a port. This is needed if we plot the cxl
+		 * graph after some region is created.
+		 */
 		dbg(p, "walk ports\n");
 		walk_child_ports(port, p, pick_array(jchildports, jports),
 				 pick_array(jchilddecoders, jportdecoders),
 				 pick_array(jchildeps, jeps),
 				 pick_array(jchilddecoders, jepdecoders),
 				 pick_array(jchilddevs, jdevs), flags);
+
+		dbg(p, "walk decoders\n");
+		walk_decoders(port, p, pick_array(jchilddecoders, jbusdecoders),
+			      pick_array(jchildregions, jregions), flags);
+
+
 		cond_add_put_array_suffix(jbus, "ports", devname, jchildports);
 		cond_add_put_array_suffix(jbus, "endpoints", devname,
 					  jchildeps);

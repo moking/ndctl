@@ -1325,8 +1325,12 @@ CXL_EXPORT const char *cxl_memdev_get_firmware_verison(struct cxl_memdev *memdev
 
 CXL_EXPORT const char *cxl_memdev_get_parent_dport(struct cxl_memdev *memdev)
 {
-	struct cxl_port *port = cxl_endpoint_get_port(memdev->endpoint);
+	struct cxl_port *port;
 
+	if (!memdev->endpoint)
+		return NULL;
+
+	port = cxl_endpoint_get_port(memdev->endpoint);
 	if (port)
 		return cxl_port_get_parent_dport(port);
 

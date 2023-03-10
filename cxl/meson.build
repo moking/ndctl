@@ -7,6 +7,7 @@ cxl_src = [
   'memdev.c',
   'json.c',
   'filter.c',
+  'graph.c',
 ]
 
 if get_option('systemd').enabled()
@@ -20,6 +21,7 @@ deps = [
   kmod,
   json,
   versiondep,
+  graphviz,
 ]
 
 if get_option('libtracefs').enabled()

@@ -485,6 +485,7 @@ struct json_object *util_cxl_memdev_to_json(struct cxl_memdev *memdev,
 	const char *devname = cxl_memdev_get_devname(memdev);
 	struct json_object *jdev, *jobj;
 	unsigned long long serial, size;
+	const char *parent_dport = cxl_memdev_get_parent_dport(memdev);
 	int numa_node;
 
 	jdev = json_object_new_object();
@@ -539,9 +540,11 @@ struct json_object *util_cxl_memdev_to_json(struct cxl_memdev *memdev,
 	if (jobj)
 		json_object_object_add(jdev, "host", jobj);
 
-	jobj = json_object_new_string(cxl_memdev_get_parent_dport(memdev));
-	if (jobj)
-		json_object_object_add(jdev, "parent_dport", jobj);
+	if (parent_dport) {
+		jobj = json_object_new_string(cxl_memdev_get_parent_dport(memdev));
+		if (jobj)
+			json_object_object_add(jdev, "parent_dport", jobj);
+	}
 
 	if (!cxl_memdev_is_enabled(memdev)) {
 		jobj = json_object_new_string("disabled");
