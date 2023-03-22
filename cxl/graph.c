@@ -45,7 +45,7 @@ static Agnode_t *create_node(Agraph_t *graph, char *label, bool created)
 	return agnode(graph, label, created);
 }
 
-static char *find_device_type(struct json_object *device)
+static const char *find_device_type(struct json_object *device)
 {
 	char *value;
 	int depth = -1;
@@ -96,95 +96,54 @@ static bool check_device_type(struct json_object *device, char *type)
 /* for labeling purposes */
 static const char *find_device_ID(struct json_object *device)
 {
-	char *dev_type = find_device_type(device);
-	json_object *ID = json_object_new_string("unknown");
-	char *rs;
+	const char *dev_type = find_device_type(device);
+	json_object *ID = NULL;
 
-	if (!strcmp(dev_type, "ACPI0017 Device")) {
-		json_object_put(ID);
+	if (!strcmp(dev_type, "ACPI0017 Device"))
 		json_object_object_get_ex(device, "bus", &ID);
-	}
 
 	if (!strcmp(dev_type, "Host Bridge")
-		|| !strcmp(dev_type, "Switch Port")) {
-		json_object_put(ID);
+		|| !strcmp(dev_type, "Switch Port"))
 		json_object_object_get_ex(device, "host", &ID);
-	}
 
-	if (!strcmp(dev_type, "Endpoint")) {
-		json_object_put(ID);
+	if (!strcmp(dev_type, "Endpoint"))
 		json_object_object_get_ex(device, "endpoint", &ID);
-	}
 
-	if (!strcmp(dev_type, "Type 3 Memory Device")) {
-		json_object_put(ID);
+	if (!strcmp(dev_type, "Type 3 Memory Device"))
 		json_object_object_get_ex(device, "memdev", &ID);
-	}
 
-	if (!strcmp(dev_type, "dport")) {
-		json_object_put(ID);
+	if (!strcmp(dev_type, "dport"))
 		json_object_object_get_ex(device, "dport", &ID);
-	}
 
-	rs = strdup(json_object_get_string(ID));
-	json_object_put(ID);
-
-	return rs;
+	return json_object_get_string(ID);
 }
 
 static bool is_device(struct json_object *device)
 {
-	char *dev_type = find_device_type(device);
+	const char *dev_type = find_device_type(device);
 
 	return (strcmp(dev_type, "dport") && strcmp(dev_type, "decoder"));
 }
 
-static char *remove_double_quote_from_json_str(const char *json_str)
-{
-	char *p = NULL;
-	size_t i, j = 0;
-
-	if (!json_str)
-		return p;
-
-	p = strdup(json_str);
-	for (i = 0; i < strlen(json_str); i++) {
-		if (json_str[i] != '\"')
-			p[j++] = json_str[i];
-	}
-	p[j] = '\0';
-
-	return p;
-}
-
-static char *find_parent_dport(struct json_object *device)
+static const char *find_parent_dport(struct json_object *device)
 {
 	json_object *rp;
-	const char *dport_str;
-	char *rs = NULL;
 
-	rp = json_object_new_string("");
 	if (!json_object_object_get_ex(device, "parent_dport", &rp))
-		goto ret;
+		return NULL;
 
-	dport_str = json_object_to_json_string_ext(rp,
-		JSON_C_TO_STRING_NOSLASHESCAPE);
-	rs = strdup(dport_str);
-ret:
-	json_object_put(rp);
-	return remove_double_quote_from_json_str(rs);
+	return json_object_get_string(rp);
 }
 
 static char *find_parent_dport_label(struct json_object *device)
 {
 	char *rp_node_name;
-	char *id = find_parent_dport(device);
+	const char *id = find_parent_dport(device);
 
 	if (!id)
 		return NULL;
 
 	asprintf(&rp_node_name, "dPort\nID: %s", id);
-	free(id);
 	if (!rp_node_name)
 		error("asprintf failed in %s\n", __func__);
 
@@ -194,13 +153,12 @@ static char *find_parent_dport_label(struct json_object *device)
 static char *find_root_port_label(struct json_object *device)
 {
 	char *rp_node_name;
-	char *id = find_parent_dport(device);
+	const char *id = find_parent_dport(device);
 
 	if (!id)
 		return NULL;
 
 	asprintf(&rp_node_name, "Root Port\nID: %s", id);
-	free(id);
 	if (!rp_node_name)
 		error("asprintf failed in %s\n", __func__);
 
@@ -216,8 +174,6 @@ static char *label_device(struct json_object *device)
 	asprintf(&label, "%s\nID: %s", devname, ID);
 	if (!label)
 		error("label allocation failed in %s\n", __func__);
-
-	free(ID);
 
 	return label;
 }
@@ -302,7 +258,7 @@ static Agnode_t **draw_subtree(struct json_object *current_array,
 	nr_top_devices = count_top_devices(current_array);
 
 	if (!nr_top_devices) {
-		warning("no top devices, return directly");
+		dbg(&param, "no top devices, return directly");
 		return NULL;
 	}
 
@@ -385,7 +341,7 @@ static Agnode_t **draw_subtree(struct json_object *current_array,
 					free(parent_dport_label);
 					nr_devs_connected++;
 				} else {
-					warning("create parent node failed: %s\n"
+					dbg(&param, "create parent node failed: %s\n"
 							, parent_dport_label);
 				}
 			}
@@ -525,13 +481,13 @@ int cmd_graph(int argc, const char **argv, struct cxl_ctx *ctx)
 	param.verbose = 1;
 	argc = parse_options(argc, argv, options, u, 0);
 	for (i = 0; i < argc; i++)
-		error("undefined parameter \"%s\"\n", argv[i]);
+		error("unknown parameter \"%s\"\n", argv[i]);
 
 	if (argc)
 		usage_with_options(u, options);
 
 	if (!param.output_file) {
-		warning("no output file name given, using topology.png by default");
+		dbg(&param, "no output file given, using topology.png by default");
 		param.output_file = "topology.png";
 	}
 
@@ -585,11 +541,13 @@ int cmd_graph(int argc, const char **argv, struct cxl_ctx *ctx)
 		if (!fp)
 			error("dump to output file %s failed", param.output_file);
 		else {
-			/***
+
+			/*
 			 * we need increase the reference count as util_display_json_array
 			 * are called more than once in which the reference count will be
 			 * decreased by one each time it is called.
-			 ***/
+			 */
+
 			json_object_get(platform);
 			util_display_json_array(fp, platform, cxl_filter_to_flags(&param));
 			fclose(fp);
@@ -601,7 +559,7 @@ int cmd_graph(int argc, const char **argv, struct cxl_ctx *ctx)
 		break;
 	}
 
-	util_display_json_array(stdout, platform, cxl_filter_to_flags(&param));
+	/*util_display_json_array(stdout, platform, cxl_filter_to_flags(&param));*/
 
 	return 0;
 }
