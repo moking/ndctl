@@ -187,8 +187,10 @@ static void create_root_ports(struct json_object *host_bridge, Agraph_t *graph,
 	size_t nr_dports, idx;
 
 	assert(check_device_type(host_bridge, "Host Bridge"));
-	if (!json_object_object_get_ex(host_bridge, "dports", &rps))
+	if (!json_object_object_get_ex(host_bridge, "dports", &rps)) {
+		dbg(&param, "no dports attribute found at host bridge\n");
 		return;
+	}
 
 	nr_dports = json_object_array_length(rps);
 	for (idx = 0; idx < nr_dports; idx++) {
@@ -213,8 +215,10 @@ static void create_downstream_ports(struct json_object *sw_port,
 	size_t nr_dports, idx;
 
 	assert(check_device_type(sw_port, "Switch Port"));
-	if (!json_object_object_get_ex(sw_port, "dports", &dps))
+	if (!json_object_object_get_ex(sw_port, "dports", &dps)) {
+		dbg(&param, "no dports attribute found at switch port\n");
 		return;
+	}
 
 	nr_dports = json_object_array_length(dps);
 	for (idx = 0; idx < nr_dports; idx++) {
@@ -246,7 +250,7 @@ static size_t count_top_devices(struct json_object *top_array)
 static Agnode_t **draw_subtree(struct json_object *current_array,
 			       Agraph_t *graph)
 {
-	size_t json_array_len, nr_top_devices, obj_idx;
+	size_t json_array_len, nr_top_devices, obj_idx, td_idx;
 	size_t idx, nr_sub_devs, nr_devs_connected;
 	char *label, *parent_dport_label;
 	Agnode_t **top_devices, **sub_devs, *parent_node;
@@ -258,7 +262,7 @@ static Agnode_t **draw_subtree(struct json_object *current_array,
 	nr_top_devices = count_top_devices(current_array);
 
 	if (!nr_top_devices) {
-		dbg(&param, "no top devices, return directly");
+		dbg(&param, "no top devices, return directly\n");
 		return NULL;
 	}
 
@@ -268,30 +272,31 @@ static Agnode_t **draw_subtree(struct json_object *current_array,
 		return NULL;
 	}
 
+	td_idx = 0;
 	for (obj_idx = 0; obj_idx < json_array_len; obj_idx++) {
 		device = json_object_array_get_idx(current_array, obj_idx);
 		if (!is_device(device))
 			continue;
 
 		label = label_device(device);
-		top_devices[obj_idx] = create_node(graph, label, 1);
+		top_devices[td_idx] = create_node(graph, label, 1);
 
-		agsafeset(top_devices[obj_idx], "shape", "box", "");
+		agsafeset(top_devices[td_idx], "shape", "box", "");
 
 		is_hb = check_device_type(device, "Host Bridge");
 		is_sw = check_device_type(device, "Switch Port");
 
 		if ((is_hb || is_sw) && !device_has_dport(device)) {
 			error("no nr_dports attribute in the json obj for %s\n",
-					is_hb ? "CXL Host bridge" : "CXL switch");
+					is_hb ? "CXL host bridge" : "CXL switch");
 			return top_devices;
 		}
 
 		/* Create root port nodes if device is a host bridge */
 		if (is_hb)
-			create_root_ports(device, graph, top_devices[obj_idx]);
+			create_root_ports(device, graph, top_devices[td_idx]);
 		else if (is_sw)
-			create_downstream_ports(device, graph, top_devices[obj_idx]);
+			create_downstream_ports(device, graph, top_devices[td_idx]);
 
 		free(label);
 
@@ -312,7 +317,7 @@ static Agnode_t **draw_subtree(struct json_object *current_array,
 				continue;
 			if (!is_hb && !is_sw) {
 				for (idx = 0; idx < nr_sub_devs; idx++)
-					agedge(graph, top_devices[obj_idx], sub_devs[idx], 0, 1);
+					agedge(graph, top_devices[td_idx], sub_devs[idx], 0, 1);
 				free(sub_devs);
 				continue;
 			}
@@ -336,18 +341,17 @@ static Agnode_t **draw_subtree(struct json_object *current_array,
 				/* with flag = 0, it will search to locate an existing node */
 				parent_node = create_node(graph, parent_dport_label, 0);
 				if (parent_node) {
-					agedge(graph, parent_node
-						, sub_devs[nr_devs_connected], 0, 1);
+					agedge(graph, parent_node,
+						sub_devs[nr_devs_connected ++], 0, 1);
 					free(parent_dport_label);
-					nr_devs_connected++;
 				} else {
-					dbg(&param, "create parent node failed: %s\n"
-							, parent_dport_label);
+					dbg(&param, "create parent node failed: %s\n",
+						parent_dport_label);
 				}
 			}
 			free(sub_devs);
-			sub_devs = NULL;
 		}
+		td_idx ++;
 	}
 
 	return top_devices;
