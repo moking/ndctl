@@ -16,7 +16,6 @@
 #include <util/log.h>
 
 #include "filter.h"
-#include "graph.h"
 
 static struct cxl_filter_params param;
 static bool debug;
@@ -381,55 +380,33 @@ struct json_object *parse_json_text(const char *path)
 	return json;
 }
 
-int output_file_type(const char *file_name)
+static int create_image(const char *filename, json_object *platform)
 {
-	/* skip ./, ../ in the path */
-	char *of_extension = strrchr(file_name, '/');
-
-	if (!of_extension)
-		of_extension = (char *)file_name;
-	else
-		of_extension += 1;
-
-	of_extension = strrchr(of_extension, '.');
-	if (!of_extension)
-		return FILE_PLAIN;
-	of_extension += 1;
-	if (!strcmp(of_extension, "json") ||
-			!strcmp(of_extension, "log") || !strcmp(of_extension, "txt"))
-		return FILE_PLAIN;
-	else if ((strcmp(of_extension, "png") && strcmp(of_extension, "jpeg") &&
-				strcmp(of_extension, "jpg"))) {
-		error("Unsupported output file type: %s", file_name);
-		return FILE_UNSUPPORTED;
-	} else
-		return FILE_GRAPH;
-}
-
-void create_image(const char *filename, json_object *platform)
-{
+	int rs = 0;
 	char *output_file = (char *)filename;
 	GVC_t *gvc;
 	Agraph_t *graph;
-	char *of_extension = strrchr(output_file, '.') + 1;
+	char *of_extension = strrchr(output_file, '.');
 	Agnode_t **top_devices;
 	FILE *FP;
 
 	gvc = gvContext();
 	if (!gvc) {
 		error("Creating gvContext failed");
-		return;
+		return -1;
 	}
 	graph = agopen("graph", Agdirected, 0);
 	if (!graph) {
 		error("agopen failed when creating cxl topology image");
+		rs = -1;
 		goto free_ctx;
 	}
 
-	if (!of_extension || (strcmp(of_extension, "png") &&
-			strcmp(of_extension, "jpeg") &&
-			strcmp(of_extension, "jpg"))) {
+	if (!of_extension || (strcmp(of_extension, ".png") &&
+			strcmp(of_extension, ".jpeg") &&
+			strcmp(of_extension, ".jpg"))) {
 		error("unsupported output image type, only png/jpeg/jpg supported\n");
+		rs = -1;
 		goto close_graph;
 	}
 
@@ -439,12 +416,14 @@ void create_image(const char *filename, json_object *platform)
 
 	if (gvLayout(gvc, graph, "dot")) {
 		error("gvLayout failed when creating cxl topology image");
+		rs = -1;
 		goto close_graph;
 	}
 
 	FP = fopen(output_file, "w");
 	if (!FP) {
 		error("open %s for storing the graph failed", output_file);
+		rs = -1;
 		goto create_exit;
 	} else {
 		gvRender(gvc, graph, strrchr(output_file, '.') + 1, FP);
@@ -457,6 +436,8 @@ close_graph:
 	agclose(graph);
 free_ctx:
 	gvFreeContext(gvc);
+
+	return rs;
 }
 
 static const struct option options[] = {
@@ -466,12 +447,20 @@ static const struct option options[] = {
 		   "path to file containing a json array describing the topology"),
 	OPT_STRING('o', "output-file", &param.output_file, "output file path",
 		   "path to file to generate graph or dump cxl topology to"),
+	OPT_STRING('t', "output-format", &param.output_format, "output format",
+		   "way to output cxl topology: plain or graph"),
 	OPT_INCR('v', "verbose", &param.verbose, "increase output detail"),
 #ifdef ENABLE_DEBUG
-	OPT_BOOLEAN(0, "debug", &debug, "debug list walk"),
+	OPT_BOOLEAN(0, "debug", &debug, "debug graph plot"),
 #endif
 	OPT_END(),
 };
+
+static int num_list_flags(void)
+{
+	return !!param.memdevs + !!param.buses + !!param.ports +
+	       !!param.endpoints + !!param.decoders + !!param.regions;
+}
 
 int cmd_graph(int argc, const char **argv, struct cxl_ctx *ctx)
 {
@@ -481,6 +470,8 @@ int cmd_graph(int argc, const char **argv, struct cxl_ctx *ctx)
 	};
 	int i;
 	json_object *platform;
+	FILE *fp;
+	int rs = 0;
 
 	param.verbose = 1;
 	argc = parse_options(argc, argv, options, u, 0);
@@ -490,35 +481,60 @@ int cmd_graph(int argc, const char **argv, struct cxl_ctx *ctx)
 	if (argc)
 		usage_with_options(u, options);
 
+	if(!param.output_format)
+		param.output_format = "graph";
+	else if (strcmp(param.output_format, "graph")
+		&& strcmp(param.output_format, "plain")) {
+		error("only plain/graph is accepted for output_format\n");
+		return 0;
+	}
+		
+
 	if (!param.output_file) {
-		dbg(&param, "no output file given, using topology.png by default");
-		param.output_file = "topology.png";
+		dbg(&param, "no output file given, using topology.png by default\n");
+		if (!strcmp(param.output_format, "graph"))
+			param.output_file = "cxl-topology-graph.png";
+		else
+			param.output_file = "cxl-topology-plain.json";
 	}
 
 	if (param.input_file) {
 		if (access(param.input_file, R_OK)) {
 			error("input file %s cannot be accessed\n", param.input_file);
-			return 0;
+			return -EPERM;
 		}
 
 		platform = parse_json_text(param.input_file);
-		create_image(param.output_file, platform);
-		json_object_put(platform);
+		if (!strcmp(param.output_format, "graph"))
+			rs = create_image(param.output_file, platform);
+		else
+			goto dump_plain;
+	}
 
-		return 0;
+	if (num_list_flags() == 0) {
+		param.buses = true;
+		param.ports = true;
+		param.endpoints = true;
+		param.memdevs = true;
 	}
 
 	switch (param.verbose) {
 	default:
 	case 3:
+		param.health = true;
+		param.partition = true;
+		param.alert_config = true;
+		/* fallthrough */
 	case 2:
 		param.idle = true;
+		/* fallthrough */
 	case 1:
-		param.memdevs = true;
 		param.buses = true;
 		param.ports = true;
 		param.endpoints = true;
+		param.decoders = true;
 		param.targets = true;
+		/*fallthrough*/
 	case 0:
 		break;
 	}
@@ -534,36 +550,23 @@ int cmd_graph(int argc, const char **argv, struct cxl_ctx *ctx)
 	if (!platform)
 		return -ENOMEM;
 
-	switch (output_file_type(param.output_file)) {
-	case FILE_GRAPH:
-		create_image(param.output_file, platform);
-		break;
-	case FILE_PLAIN:
-		FILE *fp;
-
+	if (!strcmp(param.output_format, "graph"))
+		rs = create_image(param.output_file, platform);
+	else{
+dump_plain:
 		fp = fopen(param.output_file, "w+");
-		if (!fp)
-			error("dump to output file %s failed", param.output_file);
+		if (!fp) {
+			error("dump to output file %s failed\n", param.output_file);
+			rs = -1;
+		}
 		else {
-
-			/*
-			 * we need increase the reference count as util_display_json_array
-			 * are called more than once in which the reference count will be
-			 * decreased by one each time it is called.
-			 */
-
-			json_object_get(platform);
-			util_display_json_array(fp, platform, cxl_filter_to_flags(&param));
+			fprintf(fp, "%s\n", json_object_to_json_string_ext(platform,
+				JSON_C_TO_STRING_PRETTY));
 			fclose(fp);
 		}
-		break;
-	case FILE_UNSUPPORTED:
-		error("dump to output file %s skipped due to  unsupported file type"
-			, param.output_file);
-		break;
 	}
 
-	/*util_display_json_array(stdout, platform, cxl_filter_to_flags(&param));*/
-
+	if (!rs)
+		util_display_json_array(stdout, platform, cxl_filter_to_flags(&param));
 	return 0;
 }

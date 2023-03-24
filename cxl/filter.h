@@ -34,6 +34,7 @@ struct cxl_filter_params {
 	struct log_ctx ctx;
 	const char *input_file;
 	const char *output_file;
+	const char *output_format; /*plain/graph*/
 };
 
 struct cxl_memdev *util_cxl_memdev_filter(struct cxl_memdev *memdev,

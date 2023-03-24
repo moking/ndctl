@@ -32,21 +32,23 @@ options:
 	  Everything *-vv* provides, plus enable
 	  --health and --partition.
 
+-t::
+	This option identifies the format of the CXL topology output, with "plain"
+	it will dump the cxl topology to a json formatted file, and with "graph" it
+	will generate a graph showing the cxl topology. "graph" is the choice by
+	default.
+
 -o::
 --output-file::
 	Create an image of the CXL topology or a json formatted representation of
-	the CXL. One can specify an output with -o or --output-file, when a
-	jpg/png/jpeg suffix is provided a graph containing a graph of the CXL
-	topology will be generated, and if the suffix is none/txt/json, the cxl
-	topology will be dumped in a json format to the provided file. Note this
-	option will automatically turn on the verbose option (verbose=3) and disable
-	the -E option.
+	the CXL based on the output format given by "-t" option. If no output file
+	is given, by default cxl-topology-graph.png is used for "graph" output
+	format, and "cxl-topology-plain.json" is used for "plain" output format.
 
 --input::
-	This option takes a json-formatted file with valid cxl topology and generate
-	a graph showing the CXL topology accordingly. The graph will be stored in a
-	file (.jpg, .png or .jpeg) identified by the `-o` or `--output-file` option
-	or in topology.png if no such output option is given.
+	This option takes a json-formatted file with valid CXL topology and generate
+	a graph showing the CXL topology accordingly or dump it to the output file
+	based on the output format.
 
 --debug::
 	If the cxl tool was built with debug enabled, turn on debug
@@ -57,14 +59,14 @@ EXAMPLE
 ----
 1. Taking 'cxl list' output as input to plot a graph
 	cxl list -vvv > input.json
-	cxl graph --input input.json [-o graph.png]
+	cxl graph -t graph --input input.json [-o graph.png]
 
 2. Parsing the cxl topology as cxl list does and plotting a graph
-	cxl graph -vvv [-o a.png/a.jpg/a.jpeg]
+	cxl graph -vvv -t graph [-o a.png/a.jpg/a.jpeg]
 
 3. Parsing the cxl topology as cxl list does and dump the topology to a json
 formatted file
-	cxl graph -vvv -o a.txt/a.json
+	cxl graph -vvv -t plain -o a.txt/a.json
 
 include::human-option.txt[]
 
@@ -72,4 +74,4 @@ include::../copyright.txt[]
 
 SEE ALSO
 --------
-linkcxl:cxl-list[1]
+linkcxl:cxl-graph[1]
