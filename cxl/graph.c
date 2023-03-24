@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 // Copyright (C) 2022 Fan Ni <fan.ni@samsung.com>
 // Copyright (C) 2022 Matthew Ho <sunfishho12@gmail.com>
+
 #include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -84,12 +85,17 @@ static const char *find_device_type(struct json_object *device)
 			return "cxl_acpi.0";
 	}
 
-	return "unknown device";
+	dbg(&param, "unknown device:\n%s\n",
+		json_object_to_json_string_ext(device, JSON_C_TO_STRING_PRETTY));
+	return NULL;
 }
 
 static bool check_device_type(struct json_object *device, char *type)
 {
-	return !strcmp(find_device_type(device), type);
+	const char *dev_type = find_device_type(device);
+	if (dev_type)
+		return !strcmp(dev_type, type);
+	return false;
 }
 
 /* for labeling purposes */
@@ -97,6 +103,9 @@ static const char *find_device_ID(struct json_object *device)
 {
 	const char *dev_type = find_device_type(device);
 	json_object *ID = NULL;
+
+	if(!dev_type)
+		return NULL;
 
 	if (!strcmp(dev_type, "ACPI0017 Device"))
 		json_object_object_get_ex(device, "bus", &ID);
@@ -120,8 +129,10 @@ static const char *find_device_ID(struct json_object *device)
 static bool is_device(struct json_object *device)
 {
 	const char *dev_type = find_device_type(device);
-
-	return (strcmp(dev_type, "dport") && strcmp(dev_type, "decoder"));
+	
+	if (dev_type)
+		return (strcmp(dev_type, "dport") && strcmp(dev_type, "decoder"));
+	return false;
 }
 
 static const char *find_parent_dport(struct json_object *device)
@@ -170,6 +181,7 @@ static char *label_device(struct json_object *device)
 	const char *ID = find_device_ID(device);
 	const char *devname = find_device_type(device);
 
+	assert(devname);
 	asprintf(&label, "%s\nID: %s", devname, ID);
 	if (!label)
 		error("label allocation failed in %s\n", __func__);
