@@ -21,6 +21,16 @@
 static struct cxl_filter_params param;
 static bool debug;
 
+static bool device_has_parent_dport(struct json_object *dev)
+{
+	json_object_object_foreach(dev, property, value_json) {
+		if (!strcmp(property, "parent_dport"))
+			return true;
+	}
+
+	return false;
+}
+
 static bool device_has_dport(struct json_object *dev)
 {
 	json_object_object_foreach(dev, property, value_json) {
@@ -474,6 +484,69 @@ static int num_list_flags(void)
 	       !!param.endpoints + !!param.decoders + !!param.regions;
 }
 
+static bool validate_cxl_topology_input(json_object *cur_array)
+{
+	static bool bus_detected = false;
+	static bool hb_detected = false;
+	static bool memdev_detected = false;
+	size_t arr_len, obj_idx;
+	size_t nr_top_devices;
+	bool is_hb, is_sw, is_endpoint, is_memdev;
+	json_object *device;
+	json_object_iter subdev_iter;
+
+	arr_len = json_object_array_length(cur_array);
+	nr_top_devices = count_top_devices(cur_array);
+	if (!nr_top_devices)
+		goto validate_exit;
+
+	for (obj_idx = 0; obj_idx < arr_len; obj_idx++) {
+		device = json_object_array_get_idx(cur_array, obj_idx);
+		if (!is_device(device))
+			continue;
+
+		if(check_device_type(device, "ACPI0017 Device"))
+			bus_detected = true;
+
+		is_hb = check_device_type(device, "Host Bridge");
+		is_sw = check_device_type(device, "Switch Port");
+		is_endpoint = check_device_type(device, "Endpoint");
+		is_memdev = check_device_type(device, "Type 3 Memory Device");
+		if (is_hb)
+			hb_detected = true;
+		if(is_memdev)
+			memdev_detected = true;
+		if (is_hb || is_sw)
+			if(!device_has_dport(device))
+				return false;
+		if((is_hb || is_sw || is_endpoint || is_memdev)
+			&& !device_has_parent_dport(device))
+			return false;
+
+		json_object_object_foreachC(device, subdev_iter) {
+			char *key = subdev_iter.key;
+			json_object *subdev_arr = subdev_iter.val;
+			bool memdev_field_found = is_endpoint && !strcmp(key, "memdev");
+
+			if (!json_object_is_type(subdev_arr, json_type_array)
+					&& !memdev_field_found)
+				continue;
+			/* skip dports list */
+			if (!strcmp(key, "dports"))
+				continue;
+			if (memdev_field_found){
+				memdev_detected = true;
+				return device_has_parent_dport(subdev_arr);
+			}
+			else if(!validate_cxl_topology_input(subdev_arr))
+				return false;
+		}
+	}
+
+validate_exit:
+	return bus_detected && hb_detected && memdev_detected;
+}
+
 int cmd_graph(int argc, const char **argv, struct cxl_ctx *ctx)
 {
 	const char * const u[] = {
@@ -492,36 +565,6 @@ int cmd_graph(int argc, const char **argv, struct cxl_ctx *ctx)
 
 	if (argc)
 		usage_with_options(u, options);
-
-	if(!param.output_format)
-		param.output_format = "graph";
-	else if (strcmp(param.output_format, "graph")
-		&& strcmp(param.output_format, "plain")) {
-		error("only plain/graph is accepted for output_format\n");
-		return 0;
-	}
-		
-
-	if (!param.output_file) {
-		dbg(&param, "no output file given, using topology.png by default\n");
-		if (!strcmp(param.output_format, "graph"))
-			param.output_file = "cxl-topology-graph.png";
-		else
-			param.output_file = "cxl-topology-plain.json";
-	}
-
-	if (param.input_file) {
-		if (access(param.input_file, R_OK)) {
-			error("input file %s cannot be accessed\n", param.input_file);
-			return -EPERM;
-		}
-
-		platform = parse_json_text(param.input_file);
-		if (!strcmp(param.output_format, "graph"))
-			rs = create_image(param.output_file, platform);
-		else
-			goto dump_plain;
-	}
 
 	if (num_list_flags() == 0) {
 		param.buses = true;
@@ -557,6 +600,50 @@ int cmd_graph(int argc, const char **argv, struct cxl_ctx *ctx)
 		param.ctx.log_priority = LOG_DEBUG;
 	}
 
+	if(!param.output_format)
+		param.output_format = "graph";
+	else if (strcmp(param.output_format, "graph")
+		&& strcmp(param.output_format, "plain")) {
+		error("only plain/graph is accepted for output_format\n");
+		return 0;
+	}
+
+	if (!param.output_file) {
+		dbg(&param, "no output file given, using topology.png by default\n");
+		if (!strcmp(param.output_format, "graph"))
+			param.output_file = "cxl-topology-graph.png";
+		else
+			param.output_file = "cxl-topology-plain.json";
+	}
+
+	if (param.input_file) {
+		if (access(param.input_file, R_OK)) {
+			error("input file %s cannot be accessed\n", param.input_file);
+			return -EPERM;
+		}
+
+		platform = parse_json_text(param.input_file);
+		if(!validate_cxl_topology_input(platform)) {
+			error("cxl topology from file %s not valid\n", param.input_file);
+			dbg(&param,
+				"valid cxl topology should include following info:\n\
+				1): cxl bus;\n\
+				2): cxl host bridge (HB);\n\
+				3): cxl memdev;\n\
+				4): nr_dport attribute for HB and switch (if exists);\n\
+				5): parent_dport attribute for port and memdev objects.\n\
+				\n");
+			dbg(&param, "try to generate topology file with -v option\n");
+			return -1;
+		}
+		if (!strcmp(param.output_format, "graph")) {
+			rs = create_image(param.output_file, platform);
+			goto graph_exit;
+		}
+		else
+			goto dump_plain;
+	}
+
 	dbg(&param, "walk topology\n");
 	platform = cxl_filter_walk(ctx, &param);
 	if (!platform)
@@ -578,6 +665,7 @@ dump_plain:
 		}
 	}
 
+graph_exit:
 	if (!rs)
 		util_display_json_array(stdout, platform, cxl_filter_to_flags(&param));
 	return 0;
