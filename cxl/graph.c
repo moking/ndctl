@@ -41,15 +41,6 @@ static bool device_has_dport(struct json_object *dev)
 	return false;
 }
 
-static struct json_object *convert_json_obj_to_array(struct json_object *obj)
-{
-	struct json_object *arr = json_object_new_array();
-
-	json_object_array_add(arr, obj);
-
-	return arr;
-}
-
 static Agnode_t *create_node(Agraph_t *graph, char *label, bool created)
 {
 	return agnode(graph, label, created);
@@ -268,8 +259,37 @@ static size_t count_top_devices(struct json_object *top_array)
 	return dev_counter;
 }
 
+static Agnode_t *plot_anon_memdevs(struct json_object *current_array,
+		Agraph_t *graph)
+{
+	size_t json_array_len, nr_top_devices;
+	size_t idx;
+	Agnode_t *node, *root;
+	char *label;
+	json_object *device;
+
+	json_array_len = json_object_array_length(current_array);
+	nr_top_devices = count_top_devices(current_array);
+	if(!nr_top_devices)
+		return NULL;
+
+	assert(nr_top_devices == json_array_len);
+	label = "anon memdevs";
+	root = create_node(graph, label, 1);
+
+	for (idx = 0; idx < json_array_len; idx++) {
+		device = json_object_array_get_idx(current_array, idx);
+		label = label_device(device);
+		node = create_node(graph, label, 1);
+		agsafeset(node, "shape", "box", "");
+		agedge(graph, root, node, 0, 1);
+		free(label);
+	}
+	return root;
+}
+
 static Agnode_t **draw_subtree(struct json_object *current_array,
-			       Agraph_t *graph)
+		Agraph_t *graph)
 {
 	size_t json_array_len, nr_top_devices, obj_idx, td_idx;
 	size_t idx, nr_sub_devs, nr_devs_connected;
@@ -326,10 +346,19 @@ static Agnode_t **draw_subtree(struct json_object *current_array,
 			bool is_endpoint = check_device_type(device, "Endpoint");
 			char *key = subdev_iter.key;
 
-			subdev_arr = subdev_iter.val;
-			if (is_endpoint && !strcmp(key, "memdev"))
-				subdev_arr = convert_json_obj_to_array(subdev_arr);
+			if (is_endpoint && !strcmp(key, "memdev")){
+				/*subdev_arr = convert_json_obj_to_array(subdev_arr);*/
+				Agnode_t *node;
 
+				label = label_device(subdev_iter.val);
+				node = create_node(graph, label, 1);
+				agsafeset(node, "shape", "box", "");
+				free(label);
+				agedge(graph, top_devices[td_idx], node, 0, 1);
+				break;
+			}
+
+			subdev_arr = subdev_iter.val;
 			if (!json_object_is_type(subdev_arr, json_type_array))
 				continue;
 			nr_sub_devs = count_top_devices(subdev_arr);
@@ -402,6 +431,50 @@ struct json_object *parse_json_text(const char *path)
 	return json;
 }
 
+static void draw_graph(struct json_object *current_array,
+		Agraph_t *graph)
+{
+	size_t json_array_len = json_object_array_length(current_array);
+	size_t idx;
+	json_object_iter iter;
+	json_object *device;
+	Agnode_t *anon_memdevs = NULL;
+	Agnode_t ** top_devices = NULL;
+	size_t num_top_devices = 0;
+
+	if (json_array_len == 1) {
+		if (draw_subtree(current_array, graph))
+			free(top_devices);
+	} else {
+		for(idx = 0; idx < json_array_len; idx++){
+			device = json_object_array_get_idx(current_array, idx);
+			json_object_object_foreachC(device, iter) {
+				char *key = iter.key;
+				json_object *val = iter.val;
+
+				if (!strcmp(key, "anon memdevs")) {
+					anon_memdevs = plot_anon_memdevs(val, graph);
+				} else if (!strcmp(key, "buses")) {
+					num_top_devices = json_object_array_length(val);
+					top_devices = draw_subtree(val, graph);
+				} else {
+					error("unknown top key from cxl topology\n");
+				}
+			}
+		}
+		if (anon_memdevs && top_devices) {
+			Agnode_t *root = create_node(graph, "CXL sub-system", 1);
+			agsafeset(root, "shape", "box", "");
+			agedge(graph, root, anon_memdevs, 0, 1);
+			for (idx = 0; idx < num_top_devices; idx ++){
+				agedge(graph, root, top_devices[idx], 0, 1);
+			}
+		}
+		if (top_devices)
+			free(top_devices);
+	}
+}
+
 static int create_image(const char *filename, json_object *platform)
 {
 	int rs = 0;
@@ -409,7 +482,6 @@ static int create_image(const char *filename, json_object *platform)
 	GVC_t *gvc;
 	Agraph_t *graph;
 	char *of_extension = strrchr(output_file, '.');
-	Agnode_t **top_devices;
 	FILE *FP;
 
 	gvc = gvContext();
@@ -432,10 +504,7 @@ static int create_image(const char *filename, json_object *platform)
 		goto close_graph;
 	}
 
-	top_devices = draw_subtree(platform, graph);
-	if (top_devices)
-		free(top_devices);
-
+	draw_graph(platform, graph);
 	if (gvLayout(gvc, graph, "dot")) {
 		error("gvLayout failed when creating cxl topology image");
 		rs = -1;
@@ -484,7 +553,7 @@ static int num_list_flags(void)
 	       !!param.endpoints + !!param.decoders + !!param.regions;
 }
 
-static bool validate_cxl_topology_input(json_object *cur_array)
+static bool validate_cxl_topology_input_helper(json_object *cur_array)
 {
 	static bool bus_detected = false;
 	static bool hb_detected = false;
@@ -538,13 +607,45 @@ static bool validate_cxl_topology_input(json_object *cur_array)
 				memdev_detected = true;
 				return device_has_parent_dport(subdev_arr);
 			}
-			else if(!validate_cxl_topology_input(subdev_arr))
+			else if(!validate_cxl_topology_input_helper(subdev_arr))
 				return false;
 		}
 	}
 
 validate_exit:
 	return bus_detected && hb_detected && memdev_detected;
+}
+
+static bool validate_cxl_topology_input(json_object *cur_array)
+{
+	size_t json_array_len = json_object_array_length(cur_array);
+	size_t idx;
+	json_object_iter iter;
+	json_object *device;
+
+	if (json_array_len == 1) {
+		return validate_cxl_topology_input_helper(cur_array);
+	} else {
+		for(idx = 0; idx < json_array_len; idx++){
+			device = json_object_array_get_idx(cur_array, idx);
+			json_object_object_foreachC(device, iter) {
+				char *key = iter.key;
+				json_object *val = iter.val;
+
+				if (!strcmp(key, "anon memdevs")) {
+					;
+				} else if (!strcmp(key, "buses")) {
+					if (!validate_cxl_topology_input_helper(val))
+						return false;
+				} else {
+					error("unknown top key from cxl topology: %s\n",
+						key);
+					return false;
+				}
+			}
+		}
+		return true;
+	}
 }
 
 int cmd_graph(int argc, const char **argv, struct cxl_ctx *ctx)
@@ -558,7 +659,6 @@ int cmd_graph(int argc, const char **argv, struct cxl_ctx *ctx)
 	FILE *fp;
 	int rs = 0;
 
-	param.verbose = 1;
 	argc = parse_options(argc, argv, options, u, 0);
 	for (i = 0; i < argc; i++)
 		error("unknown parameter \"%s\"\n", argv[i]);
@@ -571,6 +671,7 @@ int cmd_graph(int argc, const char **argv, struct cxl_ctx *ctx)
 		param.ports = true;
 		param.endpoints = true;
 		param.memdevs = true;
+		param.targets = true;
 	}
 
 	switch (param.verbose) {
@@ -667,6 +768,7 @@ dump_plain:
 
 graph_exit:
 	if (!rs)
-		util_display_json_array(stdout, platform, cxl_filter_to_flags(&param));
+		;
+		/*util_display_json_array(stdout, platform, cxl_filter_to_flags(&param));*/
 	return 0;
 }
