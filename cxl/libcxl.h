@@ -151,6 +151,7 @@ cxl_decoder_get_max_available_extent(struct cxl_decoder *decoder);
 enum cxl_decoder_mode {
 	CXL_DECODER_MODE_NONE,
 	CXL_DECODER_MODE_MIXED,
+	CXL_DECODER_MODE_DC,
 	CXL_DECODER_MODE_PMEM,
 	CXL_DECODER_MODE_RAM,
 };
@@ -160,6 +161,7 @@ static inline const char *cxl_decoder_mode_name(enum cxl_decoder_mode mode)
 	static const char *names[] = {
 		[CXL_DECODER_MODE_NONE] = "none",
 		[CXL_DECODER_MODE_MIXED] = "mixed",
+		[CXL_DECODER_MODE_DC] = "dc",
 		[CXL_DECODER_MODE_PMEM] = "pmem",
 		[CXL_DECODER_MODE_RAM] = "ram",
 	};
@@ -178,6 +180,8 @@ cxl_decoder_mode_from_ident(const char *ident)
 		return CXL_DECODER_MODE_RAM;
 	else if (strcmp(ident, "pmem") == 0)
 		return CXL_DECODER_MODE_PMEM;
+	else if (strcmp(ident, "dc") == 0)
+		return CXL_DECODER_MODE_DC;
 	return CXL_DECODER_MODE_NONE;
 }
 
@@ -213,6 +217,7 @@ unsigned int
 cxl_decoder_get_interleave_granularity(struct cxl_decoder *decoder);
 unsigned int cxl_decoder_get_interleave_ways(struct cxl_decoder *decoder);
 struct cxl_region *cxl_decoder_get_region(struct cxl_decoder *decoder);
+struct cxl_region *cxl_decoder_create_dc_region(struct cxl_decoder *decoder);
 struct cxl_region *cxl_decoder_create_pmem_region(struct cxl_decoder *decoder);
 struct cxl_region *cxl_decoder_create_ram_region(struct cxl_decoder *decoder);
 struct cxl_decoder *cxl_decoder_get_by_name(struct cxl_ctx *ctx,

@@ -1886,6 +1886,8 @@ static void *add_cxl_decoder(void *parent, int id, const char *cxldecoder_base)
 			decoder->mode = CXL_DECODER_MODE_RAM;
 		else if (strcmp(buf, "pmem") == 0)
 			decoder->mode = CXL_DECODER_MODE_PMEM;
+		else if (strcmp(buf, "dc") == 0)
+			decoder->mode = CXL_DECODER_MODE_DC;
 		else if (strcmp(buf, "mixed") == 0)
 			decoder->mode = CXL_DECODER_MODE_MIXED;
 		else if (strcmp(buf, "none") == 0)
@@ -2189,6 +2191,9 @@ CXL_EXPORT int cxl_decoder_set_mode(struct cxl_decoder *decoder,
 	case CXL_DECODER_MODE_RAM:
 		sprintf(buf, "ram");
 		break;
+	case CXL_DECODER_MODE_DC:
+		sprintf(buf, "dc");
+		break;
 	default:
 		err(ctx, "%s: unsupported mode: %d\n",
 		    cxl_decoder_get_devname(decoder), mode);
@@ -2314,6 +2319,8 @@ static struct cxl_region *cxl_decoder_create_region(struct cxl_decoder *decoder,
 		sprintf(path, "%s/create_pmem_region", decoder->dev_path);
 	else if (mode == CXL_DECODER_MODE_RAM)
 		sprintf(path, "%s/create_ram_region", decoder->dev_path);
+	else if (mode == CXL_DECODER_MODE_DC)
+		sprintf(path, "%s/create_dc_region", decoder->dev_path);
 
 	rc = sysfs_read_attr(ctx, path, buf);
 	if (rc < 0) {
@@ -2351,6 +2358,12 @@ static struct cxl_region *cxl_decoder_create_region(struct cxl_decoder *decoder,
 
  found:
 	return region;
+}
+
+CXL_EXPORT struct cxl_region *
+cxl_decoder_create_dc_region(struct cxl_decoder *decoder)
+{
+	return cxl_decoder_create_region(decoder, CXL_DECODER_MODE_DC);
 }
 
 CXL_EXPORT struct cxl_region *

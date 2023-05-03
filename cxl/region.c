@@ -75,7 +75,7 @@ OPT_INTEGER('w', "ways", &param.ways, \
 OPT_INTEGER('g', "granularity", &param.granularity,  \
 	    "granularity of the interleave set"), \
 OPT_STRING('t', "type", &param.type, \
-	   "region type", "region type - 'pmem' or 'ram'"), \
+	   "region type", "region type - 'pmem' or 'ram' or 'dc'"), \
 OPT_STRING('U', "uuid", &param.uuid, \
 	   "region uuid", "uuid for the new region (default: autogenerate)"), \
 OPT_BOOLEAN('m', "memdevs", &param.memdevs, \
@@ -434,6 +434,13 @@ static int validate_decoder(struct cxl_decoder *decoder,
 			return -EINVAL;
 		}
 		break;
+	case CXL_DECODER_MODE_DC:
+		if (!cxl_decoder_is_volatile_capable(decoder) &&
+				!cxl_decoder_is_pmem_capable(decoder)) {
+			log_err(&rl, "%s is not dc capable\n", devname);
+			return -EINVAL;
+		}
+		break;
 	default:
 		log_err(&rl, "unknown type: %s\n", param.type);
 		return -EINVAL;
@@ -635,6 +642,13 @@ static int create_region(struct cxl_ctx *ctx, int *count,
 		}
 	} else if (p->mode == CXL_DECODER_MODE_RAM) {
 		region = cxl_decoder_create_ram_region(p->root_decoder);
+		if (!region) {
+			log_err(&rl, "failed to create region under %s\n",
+				param.root_decoder);
+			return -ENXIO;
+		}
+	} else if (p->mode == CXL_DECODER_MODE_DC) {
+		region = cxl_decoder_create_dc_region(p->root_decoder);
 		if (!region) {
 			log_err(&rl, "failed to create region under %s\n",
 				param.root_decoder);

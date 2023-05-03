@@ -250,3 +250,8 @@ global:
 	cxl_region_get_daxctl_region;
 	cxl_port_get_parent_dport;
 } LIBCXL_4;
+
+LIBCXL_6 {
+global:
+	cxl_decoder_create_dc_region;
+} LIBCXL_5;
