@@ -7,6 +7,7 @@ cxl_src = [
   'memdev.c',
   'json.c',
   'filter.c',
+  'graph.c',
   '../daxctl/json.c',
   '../daxctl/filter.c',
 ]
@@ -23,6 +24,7 @@ deps = [
   kmod,
   json,
   versiondep,
+  graphviz,
 ]
 
 if get_option('libtracefs').enabled()
