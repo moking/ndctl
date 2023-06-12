@@ -540,6 +540,23 @@ struct json_object *util_cxl_memdev_to_json(struct cxl_memdev *memdev,
 	if (jobj)
 		json_object_object_add(jdev, "host", jobj);
 
+	/* add parent_dport attribute to memdev */
+	if (cxl_memdev_get_endpoint(memdev)) {
+		struct cxl_endpoint *ep = cxl_memdev_get_endpoint(memdev);
+
+		if (ep) {
+			struct cxl_port *port = cxl_endpoint_get_port(ep);
+
+			if (cxl_port_get_parent_dport(port)) {
+				struct cxl_dport *dport = cxl_port_get_parent_dport(port);
+
+				jobj = json_object_new_string(cxl_dport_get_devname(dport));
+				if (jobj)
+					json_object_object_add(jdev, "parent_dport", jobj);
+			}
+		}
+	}
+
 	if (!cxl_memdev_is_enabled(memdev)) {
 		jobj = json_object_new_string("disabled");
 		if (jobj)
@@ -1009,9 +1026,9 @@ static struct json_object *__util_cxl_port_to_json(struct cxl_port *port,
 		struct cxl_dport *dport = cxl_port_get_parent_dport(port);
 
 		jobj = json_object_new_string(cxl_dport_get_devname(dport));
-		if (jobj)
-			json_object_object_add(jport, "parent_dport", jobj);
-	}
+	} else
+		jobj = json_object_new_string("ACPI0017:00");
+	json_object_object_add(jport, "parent_dport", jobj);
 
 	jobj = json_object_new_int(cxl_port_get_depth(port));
 	if (jobj)
