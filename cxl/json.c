@@ -802,7 +802,7 @@ struct json_object *util_cxl_memdev_to_json(struct cxl_memdev *memdev,
 		}
 	}
 
-	for (int index; index < MAX_NUM_DC_REGIONS; index++) {
+	for (int index = 0; index < MAX_NUM_DC_REGIONS; index++) {
 		size = cxl_memdev_get_dc_size(memdev, index);
 		if (size) {
 			jobj = util_json_object_size(size, flags);
