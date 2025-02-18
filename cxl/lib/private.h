@@ -37,6 +37,7 @@ enum cxl_fwl_loading {
 struct cxl_endpoint;
 struct cxl_memdev {
 	int id, major, minor;
+	int fwctl_major, fwctl_minor;
 	int numa_node;
 	void *dev_buf;
 	size_t buf_len;

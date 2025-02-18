@@ -1253,6 +1253,66 @@ static int add_cxl_memdev_fwl(struct cxl_memdev *memdev,
 	return -ENOMEM;
 }
 
+static const char fwctl_prefix[] = "fwctl";
+static int get_feature_chardev(const char *base, char *chardev_path)
+{
+	char *path = calloc(1, strlen(base) + 100);
+	struct dirent *entry;
+	int rc = 0;
+	DIR *dir;
+
+	if (!path)
+		return -ENOMEM;
+
+	sprintf(path, "%s/fwctl/", base);
+	dir = opendir(path);
+	if (!dir) {
+		rc = -errno;
+		goto err;
+	}
+
+	while ((entry = readdir(dir)) != NULL)
+		if (strncmp(entry->d_name, fwctl_prefix, strlen(fwctl_prefix)) == 0)
+			break;
+
+	if (!entry) {
+		rc = -ENOENT;
+		goto read_err;
+	}
+
+	sprintf(chardev_path, "/dev/fwctl/%s", entry->d_name);
+
+read_err:
+	closedir(dir);
+err:
+	free(path);
+	return rc;
+}
+
+static int memdev_get_fwctl_chardev(struct cxl_memdev *memdev,
+				    const char *cxlmem_base)
+{
+	char *path = calloc(1, strlen(cxlmem_base) + 100);
+	struct stat st;
+	int rc;
+
+	rc = get_feature_chardev(cxlmem_base, path);
+	if (rc)
+		goto out;
+
+	if (stat(path, &st) < 0) {
+		rc = -errno;
+		goto out;
+	}
+
+	memdev->fwctl_major = major(st.st_rdev);
+	memdev->fwctl_minor = minor(st.st_rdev);
+
+out:
+	free(path);
+	return rc;
+}
+
 static void *add_cxl_memdev(void *parent, int id, const char *cxlmem_base)
 {
 	const char *devname = devpath_to_devname(cxlmem_base);
@@ -1278,6 +1338,10 @@ static void *add_cxl_memdev(void *parent, int id, const char *cxlmem_base)
 		goto err_read;
 	memdev->major = major(st.st_rdev);
 	memdev->minor = minor(st.st_rdev);
+
+	/* If this fails, no Features support. */
+	if (memdev_get_fwctl_chardev(memdev, cxlmem_base))
+		dbg(ctx, "%s: no Features support.\n", devname);
 
 	sprintf(path, "%s/pmem/size", cxlmem_base);
 	if (sysfs_read_attr(ctx, path, buf) == 0)
@@ -1513,6 +1577,16 @@ CXL_EXPORT int cxl_memdev_get_major(struct cxl_memdev *memdev)
 CXL_EXPORT int cxl_memdev_get_minor(struct cxl_memdev *memdev)
 {
 	return memdev->minor;
+}
+
+CXL_EXPORT int cxl_memdev_get_fwctl_major(struct cxl_memdev *memdev)
+{
+	return memdev->fwctl_major;
+}
+
+CXL_EXPORT int cxl_memdev_get_fwctl_minor(struct cxl_memdev *memdev)
+{
+	return memdev->fwctl_minor;
 }
 
 CXL_EXPORT unsigned long long cxl_memdev_get_pmem_size(struct cxl_memdev *memdev)
