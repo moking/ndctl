@@ -17,6 +17,13 @@ ndctl_deps = libndctl_deps + [
   versiondep,
 ]
 
+libcxl_deps = [
+  cxl_dep,
+  ndctl_dep,
+  uuid,
+  kmod,
+]
+
 libndctl = executable('libndctl', testcore + [ 'libndctl.c'],
   dependencies : libndctl_deps,
   include_directories : root_inc,
@@ -130,6 +137,33 @@ revoke_devmem = executable('revoke_devmem', testcore + [
   include_directories : root_inc,
 )
 
+fs = import('fs')
+
+feature_hdrs = [
+  '/usr/include/cxl/features.h',
+  '/usr/include/fwctl/cxl.h',
+  '/usr/include/fwctl/fwctl.h',
+]
+
+feat_hdrs_exist = true
+foreach file : feature_hdrs
+  if not fs.exists(file)
+    feat_hdrs_exist = false
+    break
+  endif
+endforeach
+
+if feat_hdrs_exist
+    fwctl = executable('fwctl', [
+        'fwctl.c',
+    ],
+    include_directories : root_inc,
+    dependencies : libcxl_deps,
+    )
+else
+    fwctl = []
+endif
+
 mmap = executable('mmap', 'mmap.c',)
 
 create = find_program('create.sh')
@@ -161,6 +195,10 @@ cxl_sanitize = find_program('cxl-sanitize.sh')
 cxl_destroy_region = find_program('cxl-destroy-region.sh')
 cxl_qos_class = find_program('cxl-qos-class.sh')
 cxl_poison = find_program('cxl-poison.sh')
+
+if feat_hdrs_exist
+  cxl_features = find_program('cxl-features.sh')
+endif
 
 tests = [
   [ 'libndctl',               libndctl,		  'ndctl' ],
@@ -195,6 +233,12 @@ tests = [
   [ 'cxl-qos-class.sh',       cxl_qos_class,      'cxl'   ],
   [ 'cxl-poison.sh',          cxl_poison,         'cxl'   ],
 ]
+
+if feat_hdrs_exist
+  tests += [
+    [ 'cxl-features.sh',        cxl_features,       'cxl'   ],
+  ]
+endif
 
 if get_option('destructive').enabled()
   sub_section = find_program('sub-section.sh')
@@ -249,6 +293,7 @@ foreach t : tests
       daxdev_errors,
       dax_dev,
       mmap,
+      fwctl,
     ],
     suite: t[2],
     timeout : 600,
