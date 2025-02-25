@@ -48,8 +48,10 @@ struct cxl_memdev {
 	struct list_node list;
 	unsigned long long pmem_size;
 	unsigned long long ram_size;
+	unsigned long long dynamic_ram_a_size;
 	int ram_qos_class;
 	int pmem_qos_class;
+	int dynamic_ram_a_qos_class;
 	int payload_max;
 	size_t lsa_size;
 	struct kmod_module *module;
@@ -140,6 +142,7 @@ struct cxl_decoder {
 	unsigned int interleave_granularity;
 	bool pmem_capable;
 	bool volatile_capable;
+	bool dynamic_ram_a_capable;
 	bool mem_capable;
 	bool accelmem_capable;
 	bool locked;

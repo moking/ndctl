@@ -293,4 +293,8 @@ global:
 	cxl_bus_get_by_provider;
 	cxl_memdev_get_fwctl_major;
 	cxl_memdev_get_fwctl_minor;
+	cxl_memdev_get_dynamic_ram_a_size;
+	cxl_memdev_get_dynamic_ram_a_qos_class;
+	cxl_decoder_is_dynamic_ram_a_capable;
+	cxl_decoder_create_dynamic_ram_a_region;
 } LIBECXL_8;
