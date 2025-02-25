@@ -800,6 +800,20 @@ struct json_object *util_cxl_memdev_to_json(struct cxl_memdev *memdev,
 		}
 	}
 
+	size = cxl_memdev_get_dynamic_ram_a_size(memdev);
+	if (size) {
+		jobj = util_json_object_size(size, flags);
+		if (jobj)
+			json_object_object_add(jdev, "dynamic_ram_a_size", jobj);
+
+		qos_class = cxl_memdev_get_dynamic_ram_a_qos_class(memdev);
+		if (qos_class != CXL_QOS_CLASS_NONE) {
+			jobj = json_object_new_int(qos_class);
+			if (jobj)
+				json_object_object_add(jdev, "dynamic_ram_a_qos_class", jobj);
+		}
+	}
+
 	if (flags & UTIL_JSON_HEALTH) {
 		jobj = util_cxl_memdev_health_to_json(memdev, flags);
 		if (jobj)
@@ -1058,6 +1072,12 @@ struct json_object *util_cxl_decoder_to_json(struct cxl_decoder *decoder,
 			if (jobj)
 				json_object_object_add(
 					jdecoder, "volatile_capable", jobj);
+		}
+		if (cxl_decoder_is_dynamic_ram_a_capable(decoder)) {
+			jobj = json_object_new_boolean(true);
+			if (jobj)
+				json_object_object_add(
+					jdecoder, "dynamic_ram_a_capable", jobj);
 		}
 	}
 
