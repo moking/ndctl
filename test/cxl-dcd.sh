@@ -74,7 +74,7 @@ create_dcd_region()
 	fi
 
 	# create region
-	rc=$($CXL create-region -t dynamic_ram_a -d "$decoder" -m "$mem" ${reg_size_string} | jq -r ".region")
+	rc=$($CXL create-region -t dynamic_ram_0 -d "$decoder" -m "$mem" ${reg_size_string} | jq -r ".region")
 
 	if [[ ! $rc ]]; then
 		echo "create-region failed for $decoder / $mem"
@@ -815,7 +815,7 @@ modprobe cxl_test
 readarray -t memdevs < <("$CXL" list -b cxl_test -Mi | jq -r '.[].memdev')
 
 for mem in ${memdevs[@]}; do
-	dra_size=$($CXL list -m $mem | jq -r '.[].dynamic_ram_a_size')
+	dra_size=$($CXL list -m $mem | jq -r '.[].dynamic_ram_0_size')
 	if [ "$dra_size" == "null" ]; then
 		continue
 	fi

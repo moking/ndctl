@@ -437,8 +437,8 @@ CXL_EXPORT bool cxl_region_qos_class_mismatch(struct cxl_region *region)
 		} else if (region->mode == CXL_DECODER_MODE_PMEM) {
 			if (root_decoder->qos_class != memdev->pmem_qos_class)
 				return true;
-		} else if (region->mode == CXL_DECODER_MODE_DYNAMIC_RAM_A) {
-			if (root_decoder->qos_class != memdev->dynamic_ram_a_qos_class)
+		} else if (region->mode == CXL_DECODER_MODE_DYNAMIC_RAM_0) {
+			if (root_decoder->qos_class != memdev->dynamic_ram_0_qos_class)
 				return true;
 		}
 	}
@@ -1492,9 +1492,9 @@ static void *add_cxl_memdev(void *parent, int id, const char *cxlmem_base)
 	if (sysfs_read_attr(ctx, path, buf) == 0)
 		memdev->ram_size = strtoull(buf, NULL, 0);
 
-	sprintf(path, "%s/dynamic_ram_a/size", cxlmem_base);
+	sprintf(path, "%s/dynamic_ram_0/size", cxlmem_base);
 	if (sysfs_read_attr(ctx, path, buf) == 0)
-		memdev->dynamic_ram_a_size = strtoull(buf, NULL, 0);
+		memdev->dynamic_ram_0_size = strtoull(buf, NULL, 0);
 
 	sprintf(path, "%s/pmem/qos_class", cxlmem_base);
 	if (sysfs_read_attr(ctx, path, buf) < 0)
@@ -1508,11 +1508,11 @@ static void *add_cxl_memdev(void *parent, int id, const char *cxlmem_base)
 	else
 		memdev->ram_qos_class = atoi(buf);
 
-	sprintf(path, "%s/dynamic_ram_a/qos_class", cxlmem_base);
+	sprintf(path, "%s/dynamic_ram_0/qos_class", cxlmem_base);
 	if (sysfs_read_attr(ctx, path, buf) < 0)
-		memdev->dynamic_ram_a_qos_class = CXL_QOS_CLASS_NONE;
+		memdev->dynamic_ram_0_qos_class = CXL_QOS_CLASS_NONE;
 	else
-		memdev->dynamic_ram_a_qos_class = atoi(buf);
+		memdev->dynamic_ram_0_qos_class = atoi(buf);
 
 	sprintf(path, "%s/payload_max", cxlmem_base);
 	if (sysfs_read_attr(ctx, path, buf) == 0) {
@@ -1750,9 +1750,9 @@ CXL_EXPORT unsigned long long cxl_memdev_get_ram_size(struct cxl_memdev *memdev)
 	return memdev->ram_size;
 }
 
-CXL_EXPORT unsigned long long cxl_memdev_get_dynamic_ram_a_size(struct cxl_memdev *memdev)
+CXL_EXPORT unsigned long long cxl_memdev_get_dynamic_ram_0_size(struct cxl_memdev *memdev)
 {
-	return memdev->dynamic_ram_a_size;
+	return memdev->dynamic_ram_0_size;
 }
 
 CXL_EXPORT int cxl_memdev_get_pmem_qos_class(struct cxl_memdev *memdev)
@@ -1765,9 +1765,9 @@ CXL_EXPORT int cxl_memdev_get_ram_qos_class(struct cxl_memdev *memdev)
 	return memdev->ram_qos_class;
 }
 
-CXL_EXPORT int cxl_memdev_get_dynamic_ram_a_qos_class(struct cxl_memdev *memdev)
+CXL_EXPORT int cxl_memdev_get_dynamic_ram_0_qos_class(struct cxl_memdev *memdev)
 {
-	return memdev->dynamic_ram_a_qos_class;
+	return memdev->dynamic_ram_0_qos_class;
 }
 
 CXL_EXPORT const char *cxl_memdev_get_firmware_verison(struct cxl_memdev *memdev)
@@ -2509,8 +2509,8 @@ static void *add_cxl_decoder(void *parent, int id, const char *cxldecoder_base)
 			decoder->mode = CXL_DECODER_MODE_MIXED;
 		else if (strcmp(buf, "none") == 0)
 			decoder->mode = CXL_DECODER_MODE_NONE;
-		else if (strcmp(buf, "dynamic_ram_a") == 0)
-			decoder->mode = CXL_DECODER_MODE_DYNAMIC_RAM_A;
+		else if (strcmp(buf, "dynamic_ram_0") == 0)
+			decoder->mode = CXL_DECODER_MODE_DYNAMIC_RAM_0;
 		else
 			decoder->mode = CXL_DECODER_MODE_MIXED;
 	} else
@@ -2550,7 +2550,7 @@ static void *add_cxl_decoder(void *parent, int id, const char *cxldecoder_base)
 	case CXL_PORT_SWITCH:
 		decoder->pmem_capable = true;
 		decoder->volatile_capable = true;
-		decoder->dynamic_ram_a_capable = true;
+		decoder->dynamic_ram_0_capable = true;
 		decoder->mem_capable = true;
 		decoder->accelmem_capable = true;
 		sprintf(path, "%s/locked", cxldecoder_base);
@@ -2575,7 +2575,7 @@ static void *add_cxl_decoder(void *parent, int id, const char *cxldecoder_base)
 			{ "cap_type3", &decoder->mem_capable },
 			{ "cap_ram", &decoder->volatile_capable },
 			{ "cap_pmem", &decoder->pmem_capable },
-			{ "cap_dynamic_ram_a", &decoder->dynamic_ram_a_capable },
+			{ "cap_dynamic_ram_0", &decoder->dynamic_ram_0_capable },
 			{ "locked", &decoder->locked },
 		};
 
@@ -2826,8 +2826,8 @@ CXL_EXPORT int cxl_decoder_set_mode(struct cxl_decoder *decoder,
 	case CXL_DECODER_MODE_RAM:
 		sprintf(buf, "ram");
 		break;
-	case CXL_DECODER_MODE_DYNAMIC_RAM_A:
-		sprintf(buf, "dynamic_ram_a");
+	case CXL_DECODER_MODE_DYNAMIC_RAM_0:
+		sprintf(buf, "dynamic_ram_0");
 		break;
 	default:
 		err(ctx, "%s: unsupported mode: %d\n",
@@ -2880,9 +2880,9 @@ CXL_EXPORT bool cxl_decoder_is_volatile_capable(struct cxl_decoder *decoder)
 	return decoder->volatile_capable;
 }
 
-CXL_EXPORT bool cxl_decoder_is_dynamic_ram_a_capable(struct cxl_decoder *decoder)
+CXL_EXPORT bool cxl_decoder_is_dynamic_ram_0_capable(struct cxl_decoder *decoder)
 {
-	return decoder->dynamic_ram_a_capable;
+	return decoder->dynamic_ram_0_capable;
 }
 
 CXL_EXPORT bool cxl_decoder_is_mem_capable(struct cxl_decoder *decoder)
@@ -2959,8 +2959,8 @@ static struct cxl_region *cxl_decoder_create_region(struct cxl_decoder *decoder,
 		sprintf(path, "%s/create_pmem_region", decoder->dev_path);
 	else if (mode == CXL_DECODER_MODE_RAM)
 		sprintf(path, "%s/create_ram_region", decoder->dev_path);
-	else if (mode == CXL_DECODER_MODE_DYNAMIC_RAM_A)
-		sprintf(path, "%s/create_dynamic_ram_a_region", decoder->dev_path);
+	else if (mode == CXL_DECODER_MODE_DYNAMIC_RAM_0)
+		sprintf(path, "%s/create_dynamic_ram_0_region", decoder->dev_path);
 
 	rc = sysfs_read_attr(ctx, path, buf);
 	if (rc < 0) {
@@ -3013,9 +3013,9 @@ cxl_decoder_create_ram_region(struct cxl_decoder *decoder)
 }
 
 CXL_EXPORT struct cxl_region *
-cxl_decoder_create_dynamic_ram_a_region(struct cxl_decoder *decoder)
+cxl_decoder_create_dynamic_ram_0_region(struct cxl_decoder *decoder)
 {
-	return cxl_decoder_create_region(decoder, CXL_DECODER_MODE_DYNAMIC_RAM_A);
+	return cxl_decoder_create_region(decoder, CXL_DECODER_MODE_DYNAMIC_RAM_0);
 }
 
 CXL_EXPORT int cxl_decoder_get_nr_targets(struct cxl_decoder *decoder)
