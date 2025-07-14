@@ -800,17 +800,26 @@ struct json_object *util_cxl_memdev_to_json(struct cxl_memdev *memdev,
 		}
 	}
 
-	size = cxl_memdev_get_dynamic_ram_0_size(memdev);
-	if (size) {
-		jobj = util_json_object_size(size, flags);
-		if (jobj)
-			json_object_object_add(jdev, "dynamic_ram_0_size", jobj);
+	for (int i = 0; i < 8; i++) {
+		size = cxl_memdev_get_dynamic_ram_size(memdev, i);
+		if (size) {
+			char name[32];
 
-		qos_class = cxl_memdev_get_dynamic_ram_0_qos_class(memdev);
-		if (qos_class != CXL_QOS_CLASS_NONE) {
-			jobj = json_object_new_int(qos_class);
-			if (jobj)
-				json_object_object_add(jdev, "dynamic_ram_0_qos_class", jobj);
+			memset(name, 0, 32);
+			jobj = util_json_object_size(size, flags);
+			if (jobj) {
+				sprintf(name, "%s_size", cxl_decoder_mode_name(CXL_DECODER_MODE_DYNAMIC_RAM_0 + i));
+				json_object_object_add(jdev, name, jobj);
+			}
+
+			qos_class = cxl_memdev_get_dynamic_ram_qos_class(memdev, i);
+			if (qos_class != CXL_QOS_CLASS_NONE) {
+				jobj = json_object_new_int(qos_class);
+				if (jobj) {
+					sprintf(name, "%s_qos_class", cxl_decoder_mode_name(CXL_DECODER_MODE_DYNAMIC_RAM_0 + i));
+					json_object_object_add(jdev, name, jobj);
+				}
+			}
 		}
 	}
 
@@ -1073,11 +1082,18 @@ struct json_object *util_cxl_decoder_to_json(struct cxl_decoder *decoder,
 				json_object_object_add(
 					jdecoder, "volatile_capable", jobj);
 		}
-		if (cxl_decoder_is_dynamic_ram_0_capable(decoder)) {
-			jobj = json_object_new_boolean(true);
-			if (jobj)
-				json_object_object_add(
-					jdecoder, "dynamic_ram_0_capable", jobj);
+		for (int i = 0; i < 8; i++) {
+			if (cxl_decoder_is_dynamic_ram_capable(decoder, i)) {
+				char name[32];
+				jobj = json_object_new_boolean(true);
+				if (jobj) {
+					memset(name, 0, 32);
+					sprintf(name, "%s_capable",
+	     cxl_decoder_mode_name(CXL_DECODER_MODE_DYNAMIC_RAM_0 + i));
+					json_object_object_add(
+						jdecoder, name, jobj);
+				}
+			}
 		}
 	}
 

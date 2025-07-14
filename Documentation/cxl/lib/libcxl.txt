@@ -424,6 +424,13 @@ enum cxl_decoder_mode {
 	CXL_DECODER_MODE_PMEM,
 	CXL_DECODER_MODE_RAM,
 	CXL_DECODER_MODE_DYNAMIC_RAM_0,
+	CXL_DECODER_MODE_DYNAMIC_RAM_1,
+	CXL_DECODER_MODE_DYNAMIC_RAM_2,
+	CXL_DECODER_MODE_DYNAMIC_RAM_3,
+	CXL_DECODER_MODE_DYNAMIC_RAM_4,
+	CXL_DECODER_MODE_DYNAMIC_RAM_5,
+	CXL_DECODER_MODE_DYNAMIC_RAM_6,
+	CXL_DECODER_MODE_DYNAMIC_RAM_7,
 };
 enum cxl_decoder_mode cxl_decoder_get_mode(struct cxl_decoder *decoder);
 int cxl_decoder_set_mode(struct cxl_decoder *decoder, enum cxl_decoder_mode mode);

@@ -74,10 +74,10 @@ int cxl_memdev_get_fwctl_minor(struct cxl_memdev *memdev);
 struct cxl_ctx *cxl_memdev_get_ctx(struct cxl_memdev *memdev);
 unsigned long long cxl_memdev_get_pmem_size(struct cxl_memdev *memdev);
 unsigned long long cxl_memdev_get_ram_size(struct cxl_memdev *memdev);
-unsigned long long cxl_memdev_get_dynamic_ram_0_size(struct cxl_memdev *memdev);
+unsigned long long cxl_memdev_get_dynamic_ram_size(struct cxl_memdev *memdev, int n);
 int cxl_memdev_get_pmem_qos_class(struct cxl_memdev *memdev);
 int cxl_memdev_get_ram_qos_class(struct cxl_memdev *memdev);
-int cxl_memdev_get_dynamic_ram_0_qos_class(struct cxl_memdev *memdev);
+int cxl_memdev_get_dynamic_ram_qos_class(struct cxl_memdev *memdev, int n);
 const char *cxl_memdev_get_firmware_verison(struct cxl_memdev *memdev);
 bool cxl_memdev_fw_update_in_progress(struct cxl_memdev *memdev);
 size_t cxl_memdev_fw_update_get_remaining(struct cxl_memdev *memdev);
@@ -203,6 +203,13 @@ enum cxl_decoder_mode {
 	CXL_DECODER_MODE_PMEM,
 	CXL_DECODER_MODE_RAM,
 	CXL_DECODER_MODE_DYNAMIC_RAM_0,
+	CXL_DECODER_MODE_DYNAMIC_RAM_1,
+	CXL_DECODER_MODE_DYNAMIC_RAM_2,
+	CXL_DECODER_MODE_DYNAMIC_RAM_3,
+	CXL_DECODER_MODE_DYNAMIC_RAM_4,
+	CXL_DECODER_MODE_DYNAMIC_RAM_5,
+	CXL_DECODER_MODE_DYNAMIC_RAM_6,
+	CXL_DECODER_MODE_DYNAMIC_RAM_7,
 };
 
 static inline const char *cxl_decoder_mode_name(enum cxl_decoder_mode mode)
@@ -213,9 +220,16 @@ static inline const char *cxl_decoder_mode_name(enum cxl_decoder_mode mode)
 		[CXL_DECODER_MODE_PMEM] = "pmem",
 		[CXL_DECODER_MODE_RAM] = "ram",
 		[CXL_DECODER_MODE_DYNAMIC_RAM_0] = "dynamic_ram_0",
+		[CXL_DECODER_MODE_DYNAMIC_RAM_1] = "dynamic_ram_1",
+		[CXL_DECODER_MODE_DYNAMIC_RAM_2] = "dynamic_ram_2",
+		[CXL_DECODER_MODE_DYNAMIC_RAM_3] = "dynamic_ram_3",
+		[CXL_DECODER_MODE_DYNAMIC_RAM_4] = "dynamic_ram_4",
+		[CXL_DECODER_MODE_DYNAMIC_RAM_5] = "dynamic_ram_5",
+		[CXL_DECODER_MODE_DYNAMIC_RAM_6] = "dynamic_ram_6",
+		[CXL_DECODER_MODE_DYNAMIC_RAM_7] = "dynamic_ram_7",
 	};
 
-	if (mode < CXL_DECODER_MODE_NONE || mode > CXL_DECODER_MODE_DYNAMIC_RAM_0)
+	if (mode < CXL_DECODER_MODE_NONE || mode > CXL_DECODER_MODE_DYNAMIC_RAM_7)
 		mode = CXL_DECODER_MODE_NONE;
 	return names[mode];
 }
@@ -231,6 +245,20 @@ cxl_decoder_mode_from_ident(const char *ident)
 		return CXL_DECODER_MODE_PMEM;
 	else if (strcmp(ident, "dynamic_ram_0") == 0)
 		return CXL_DECODER_MODE_DYNAMIC_RAM_0;
+	else if (strcmp(ident, "dynamic_ram_1") == 0)
+		return CXL_DECODER_MODE_DYNAMIC_RAM_1;
+	else if (strcmp(ident, "dynamic_ram_2") == 0)
+		return CXL_DECODER_MODE_DYNAMIC_RAM_2;
+	else if (strcmp(ident, "dynamic_ram_3") == 0)
+		return CXL_DECODER_MODE_DYNAMIC_RAM_3;
+	else if (strcmp(ident, "dynamic_ram_4") == 0)
+		return CXL_DECODER_MODE_DYNAMIC_RAM_4;
+	else if (strcmp(ident, "dynamic_ram_5") == 0)
+		return CXL_DECODER_MODE_DYNAMIC_RAM_5;
+	else if (strcmp(ident, "dynamic_ram_6") == 0)
+		return CXL_DECODER_MODE_DYNAMIC_RAM_6;
+	else if (strcmp(ident, "dynamic_ram_7") == 0)
+		return CXL_DECODER_MODE_DYNAMIC_RAM_7;
 	return CXL_DECODER_MODE_NONE;
 }
 
@@ -260,7 +288,7 @@ cxl_decoder_get_target_type(struct cxl_decoder *decoder);
 bool cxl_decoder_is_pmem_capable(struct cxl_decoder *decoder);
 bool cxl_decoder_is_volatile_capable(struct cxl_decoder *decoder);
 bool cxl_decoder_is_mem_capable(struct cxl_decoder *decoder);
-bool cxl_decoder_is_dynamic_ram_0_capable(struct cxl_decoder *decoder);
+bool cxl_decoder_is_dynamic_ram_capable(struct cxl_decoder *decoder, int n);
 bool cxl_decoder_is_accelmem_capable(struct cxl_decoder *decoder);
 bool cxl_decoder_is_locked(struct cxl_decoder *decoder);
 unsigned int
@@ -269,7 +297,8 @@ unsigned int cxl_decoder_get_interleave_ways(struct cxl_decoder *decoder);
 struct cxl_region *cxl_decoder_get_region(struct cxl_decoder *decoder);
 struct cxl_region *cxl_decoder_create_pmem_region(struct cxl_decoder *decoder);
 struct cxl_region *cxl_decoder_create_ram_region(struct cxl_decoder *decoder);
-struct cxl_region *cxl_decoder_create_dynamic_ram_0_region(struct cxl_decoder *decoder);
+struct cxl_region *cxl_decoder_create_dynamic_ram_region(struct cxl_decoder *decoder,
+							   enum cxl_decoder_mode mode);
 struct cxl_decoder *cxl_decoder_get_by_name(struct cxl_ctx *ctx,
 					    const char *ident);
 struct cxl_memdev *cxl_decoder_get_memdev(struct cxl_decoder *decoder);
@@ -349,6 +378,7 @@ int cxl_region_clear_all_targets(struct cxl_region *region);
 int cxl_region_decode_commit(struct cxl_region *region);
 int cxl_region_decode_reset(struct cxl_region *region);
 bool cxl_region_qos_class_mismatch(struct cxl_region *region);
+bool cxl_decoder_is_dc_mode(enum cxl_decoder_mode mode);
 
 #define cxl_region_foreach(decoder, region)                                    \
 	for (region = cxl_region_get_first(decoder); region != NULL;           \

@@ -304,7 +304,7 @@ static int parse_create_options(struct cxl_ctx *ctx, int count,
 	if (param.type) {
 		p->mode = cxl_decoder_mode_from_ident(param.type);
 		if ((p->mode == CXL_DECODER_MODE_RAM ||
-		     p->mode == CXL_DECODER_MODE_DYNAMIC_RAM_0) && param.uuid) {
+		     cxl_decoder_is_dc_mode(p->mode)) && param.uuid) {
 			log_err(&rl,
 				"can't set UUID for ram / volatile regions");
 			goto err;
@@ -419,7 +419,8 @@ static void collect_minsize(struct cxl_ctx *ctx, struct parsed_params *p)
 			size = cxl_memdev_get_pmem_size(memdev);
 			break;
 		case CXL_DECODER_MODE_DYNAMIC_RAM_0:
-			size = cxl_memdev_get_dynamic_ram_0_size(memdev);
+			size = cxl_memdev_get_dynamic_ram_size(memdev,
+					    p->mode - CXL_DECODER_MODE_DYNAMIC_RAM_0);
 			break;
 		default:
 			/* Shouldn't ever get here */ ;
@@ -455,7 +456,8 @@ static int create_region_validate_qos_class(struct parsed_params *p)
 		else if (p->mode == CXL_DECODER_MODE_PMEM)
 			qos_class = cxl_memdev_get_pmem_qos_class(memdev);
 		else
-			qos_class = cxl_memdev_get_dynamic_ram_0_qos_class(memdev);
+			qos_class = cxl_memdev_get_dynamic_ram_qos_class(memdev,
+						    p->mode - CXL_DECODER_MODE_DYNAMIC_RAM_0);
 
 		/* No qos_class entries. Possibly no kernel support */
 		if (qos_class == CXL_QOS_CLASS_NONE)
@@ -494,9 +496,10 @@ static int validate_decoder(struct cxl_decoder *decoder,
 			return -EINVAL;
 		}
 		break;
-	case CXL_DECODER_MODE_DYNAMIC_RAM_0:
-		if (!cxl_decoder_is_dynamic_ram_0_capable(decoder)) {
-			log_err(&rl, "%s is not dynamic_ram_0 capable\n", devname);
+	case CXL_DECODER_MODE_DYNAMIC_RAM_0...CXL_DECODER_MODE_DYNAMIC_RAM_7:
+		if (!cxl_decoder_is_dynamic_ram_capable(decoder, p->mode)) {
+			log_err(&rl, "%s is not dynamic_ram_%d capable\n",
+	   devname, p->mode - CXL_DECODER_MODE_DYNAMIC_RAM_0);
 			return -EINVAL;
 		}
 		break;
@@ -524,8 +527,10 @@ static void set_type_from_decoder(struct cxl_ctx *ctx, struct parsed_params *p)
 	 * default to pmem if all types are set, otherwise the single
 	 * capability dominates.
 	 */
-	if (cxl_decoder_is_dynamic_ram_0_capable(p->root_decoder))
-		p->mode = CXL_DECODER_MODE_DYNAMIC_RAM_0;
+	for (int i = 0; i < 8; i++) {
+		if (cxl_decoder_is_dynamic_ram_capable(p->root_decoder, i))
+			p->mode = CXL_DECODER_MODE_DYNAMIC_RAM_0 + i;
+		}
 	if (cxl_decoder_is_volatile_capable(p->root_decoder))
 		p->mode = CXL_DECODER_MODE_RAM;
 	if (cxl_decoder_is_pmem_capable(p->root_decoder))
@@ -713,8 +718,8 @@ static int create_region(struct cxl_ctx *ctx, int *count,
 				param.root_decoder);
 			return -ENXIO;
 		}
-	} else if (p->mode == CXL_DECODER_MODE_DYNAMIC_RAM_0) {
-		region = cxl_decoder_create_dynamic_ram_0_region(p->root_decoder);
+	} else if (cxl_decoder_is_dc_mode(p->mode)) {
+		region = cxl_decoder_create_dynamic_ram_region(p->root_decoder, p->mode);
 		if (!region) {
 			log_err(&rl, "failed to create region under %s\n",
 				param.root_decoder);
